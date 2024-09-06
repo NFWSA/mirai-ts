@@ -6,7 +6,7 @@
 import type { Mirai } from './mirai'
 
 import { getPlain } from './utils/internal'
-import { isAt, isChatMessage } from './utils/check'
+import { isAt, isChatMessage, isSyncMessage } from './utils/check'
 
 import type {
   BotInvitedJoinGroupRequestOperationType,
@@ -22,7 +22,7 @@ import type { EventType } from '.'
  */
 export function createHelperForMsg(
   mirai: Mirai,
-  msg: MessageType.ChatMessage | EventType.Event,
+  msg: MessageType.ChatMessage | MessageType.SyncMessage | EventType.Event,
 ) {
   mirai.curMsg = msg
 
@@ -45,6 +45,39 @@ export function createHelperForMsg(
     }
     msg.friend = (...qqs) => {
       return qqs.includes(msg.sender.id)
+    }
+
+    msg.get = (type) => {
+      let curSingleMessage: MessageType.SingleMessage | null = null
+      msg.messageChain.some((singleMessage) => {
+        if (singleMessage.type === type) {
+          curSingleMessage = singleMessage
+          return true
+        }
+        return false
+      })
+      return curSingleMessage
+    }
+  }
+  // 消息类型添加直接获取消息内容的参数
+  else if (isSyncMessage(msg)) {
+    msg.plain = getPlain(msg.messageChain)
+
+    if (msg.type === 'GroupSyncMessage') {
+      // 添加判断是否被艾特的辅助函数
+      msg.isAt = (qq?: number) => {
+        return isAt(msg, qq || mirai.qq) as boolean
+      }
+    }
+
+    // 语法糖
+    msg.group = (...groupIds) => {
+      return groupIds.includes(
+        (msg as MessageType.GroupSyncMessage).subject.id,
+      )
+    }
+    msg.friend = (...qqs) => {
+      return qqs.includes(msg.subject.id)
     }
 
     msg.get = (type) => {
