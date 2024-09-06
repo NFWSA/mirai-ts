@@ -382,11 +382,11 @@ export namespace MessageType {
   export type MessageChain = Array<SingleMessage>
 
   interface BaseChatMessage extends BaseSingleMessage {
-    type: 'GroupMessage' | 'TempMessage' | 'FriendMessage'
+    type: 'GroupMessage' | 'TempMessage' | 'FriendMessage' | 'StrangerMessage' | 'OtherClientMessage'
     messageChain: MessageChain & {
       0: Source
     }
-    sender: Contact.User
+    sender: Contact.User | Contact.OtherClient
     /**
      * 快捷回复函数
      */
@@ -430,11 +430,19 @@ export namespace MessageType {
     type: 'TempMessage'
     sender: Contact.Member
   }
+  export interface StrangerMessage extends BaseChatMessage {
+    type: 'StrangerMessage'
+    sender: Contact.Friend
+  }
+  export interface OtherClientMessage extends BaseChatMessage {
+    type: 'OtherClientMessage'
+    sender: Contact.OtherClient
+  }
 
   /**
    * 包括 FriendMessage GroupMessage TempMessage
    */
-  export type ChatMessage = GroupMessage | TempMessage | FriendMessage
+  export type ChatMessage = GroupMessage | TempMessage | FriendMessage | StrangerMessage | OtherClientMessage
 
   /**
    * 聊天消息类型
@@ -446,5 +454,80 @@ export namespace MessageType {
     GroupMessage: GroupMessage
     FriendMessage: FriendMessage
     TempMessage: TempMessage
+    StrangerMessage: StrangerMessage
+    OtherClientMessage: OtherClientMessage
   }
+
+  interface BaseSyncMessage extends BaseSingleMessage {
+    type: 'GroupSyncMessage' | 'TempSyncMessage' | 'FriendSyncMessage' | 'StrangerSyncMessage'
+    messageChain: MessageChain & {
+      0: Source
+    }
+    subject: Contact.User | Contact.Group
+    /**
+     * 快捷回复函数
+     */
+    reply: (msgChain: string | MessageChain, quote?: boolean) => Promise<SendMessage>
+    /**
+     * 消息文本
+     */
+    plain: string
+    /**
+     * 是否发送给某群 groupId
+     * msg.group(114514)
+     */
+    group: (...groupIds: number[]) => Boolean
+    /**
+     * 是否发送给某个好友 qq
+     * msg.friend(114514)
+     */
+    friend: (...qqs: number[]) => Boolean
+    /**
+     * 获取消息链中第一次出现的消息类型
+     * 例如：msg.get('Quote')
+     */
+    get: <T extends SingleMessage['type']>(
+      type: T
+    ) => SingleMessageMap[T] | null
+  }
+
+  export interface FriendSyncMessage extends BaseSyncMessage {
+    type: 'FriendSyncMessage'
+    subject: Contact.Friend
+  }
+  export interface GroupSyncMessage extends BaseSyncMessage {
+    type: 'GroupSyncMessage'
+    subject: Contact.Group
+    /**
+     * 判断是否艾特某人（留空则判断是否艾特自己）
+     */
+    isAt: (qq?: number) => boolean
+  }
+  export interface TempSyncMessage extends BaseSyncMessage {
+    type: 'TempSyncMessage'
+    subject: Contact.Member
+  }
+  export interface StrangerSyncMessage extends BaseSyncMessage {
+    type: 'StrangerSyncMessage'
+    subject: Contact.Friend
+  }
+
+  /**
+   * 包括 FriendSyncMessage GroupSyncMessage TempSyncMessage
+   */
+  export type SyncMessage = GroupSyncMessage | TempSyncMessage | FriendSyncMessage | StrangerSyncMessage
+
+  /**
+   * 聊天消息类型
+   */
+  export type SyncMessageType = SyncMessage['type']
+
+  export interface SyncMessageMap {
+    sync: SyncMessage
+    GroupSyncMessage: GroupSyncMessage
+    FriendSyncMessage: FriendSyncMessage
+    TempSyncMessage: TempSyncMessage
+    StrangerSyncMessage: StrangerSyncMessage
+  }
+
 }

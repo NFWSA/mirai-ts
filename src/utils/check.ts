@@ -106,11 +106,28 @@ export function match(
  * @param msg 消息链
  */
 export function isChatMessage(
-  msg: MessageType.ChatMessage | EventType.Event | any,
+  msg: MessageType.ChatMessage | MessageType.SyncMessage | EventType.Event | any,
 ): msg is MessageType.ChatMessage {
   if (!msg || !msg.type)
     return false
-  const msgType = ['FriendMessage', 'GroupMessage', 'TempMessage']
+  const msgType = ['FriendMessage', 'GroupMessage', 'TempMessage', 'StrangerMessage', 'OtherClientMessage']
+  return msgType.includes(msg.type)
+}
+
+// ------------
+// helper
+// 检测消息链
+/**
+ * 是否是聊天同步信息中的一种
+ * ['FriendSyncMessage', 'GroupSyncMessage', 'TempSyncMessage', 'StrangerSyncMessage']
+ * @param msg 消息链
+ */
+export function isSyncMessage(
+  msg: MessageType.ChatMessage | MessageType.SyncMessage | EventType.Event | any,
+): msg is MessageType.SyncMessage {
+  if (!msg || !msg.type)
+    return false
+  const msgType = ['FriendSyncMessage', 'GroupSyncMessage', 'TempSyncMessage', 'StrangerSyncMessage']
   return msgType.includes(msg.type)
 }
 
@@ -121,7 +138,7 @@ export function isChatMessage(
  * @param msg
  */
 export function isAt(
-  msg: MessageType.ChatMessage,
+  msg: MessageType.ChatMessage | MessageType.SyncMessage,
   qq?: number,
 ): boolean | MessageType.At {
   if (qq) {

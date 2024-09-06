@@ -25,25 +25,30 @@ import type {
 /**
  * 所有消息
  */
-export type MessageAndEvent = MessageType.ChatMessage | EventType.Event
+export type MessageAndEvent = MessageType.ChatMessage | MessageType.SyncMessage | EventType.Event
 
 /**
  * 所有消息类型
  */
 export type MessageAndEventType =
   | MessageType.ChatMessageType
+  | MessageType.SyncMessage
   | EventType.EventType
 
 /**
  * 数据类型
  */
 export type Data<
-  T extends 'message' | EventType.EventType | MessageType.ChatMessageType,
+  T extends 'message' | 'sync' | EventType.EventType | MessageType.ChatMessageType | MessageType.SyncMessageType,
 > = T extends EventType.EventType
   ? EventType.EventMap[T]
   : T extends MessageType.ChatMessageType
     ? MessageType.ChatMessageMap[T]
-    : MessageType.ChatMessage
+    : T extends MessageType.SyncMessageType
+      ? MessageType.SyncMessageMap[T]
+      : T extends 'sync'
+        ? MessageType.SyncMessage
+        : MessageType.ChatMessage
 
 export type SendMessageType = 'friend' | 'group'
 
@@ -93,7 +98,7 @@ export class Mirai {
   /**
    * 当前处理的消息
    */
-  curMsg?: MessageType.ChatMessage | EventType.Event
+  curMsg?: MessageType.ChatMessage | MessageType.SyncMessage | EventType.Event
   /**
    * 事件触发器
    */
@@ -186,17 +191,30 @@ export class Mirai {
   }
 
   /**
-   * message 展开为 FriendMessage | GroupMessage | TempMessage
+   * message 展开为 FriendMessage | GroupMessage | TempMessage | StrangerMessage | OtherClientMessage
    * @param method
    * @param callback
    */
   _adaptMessageForAll<
-    T extends 'message' | EventType.EventType | MessageType.ChatMessageType,
-  >(method: 'on' | 'off' | 'once',
-    callback: (data: Data<T>) => any,
-  ) {
+    T extends 'message' | 'sync' | EventType.EventType | MessageType.ChatMessageType | MessageType.SyncMessageType,
+  >(method: 'on' | 'off' | 'once', callback: (data: Data<T>) => any) {
     const emitter = this.eventEmitter
-    const messageType = ['FriendMessage', 'GroupMessage', 'TempMessage']
+    const messageType = ['FriendMessage', 'GroupMessage', 'TempMessage', 'StrangerMessage', 'OtherClientMessage']
+    messageType.forEach((message) => {
+      emitter[method](message, callback)
+    })
+  }
+
+  /**
+   * sync 展开为 FriendSyncMessage | GroupSyncMessage | TempSyncMessage | StrangerSyncMessage
+   * @param method
+   * @param callback
+   */
+  _adaptSyncMessageForAll<
+    T extends 'message' | 'sync' | EventType.EventType | MessageType.ChatMessageType | MessageType.SyncMessageType,
+  >(method: 'on' | 'off' | 'once', callback: (data: Data<T>) => any) {
+    const emitter = this.eventEmitter
+    const messageType = ['FriendSyncMessage', 'GroupSyncMessage', 'TempSyncMessage', 'StrangerSyncMessage']
     messageType.forEach((message) => {
       emitter[method](message, callback)
     })
@@ -210,7 +228,7 @@ export class Mirai {
    * @param type
    * @param callback
    */
-  on<T extends 'message' | EventType.EventType | MessageType.ChatMessageType>(
+  on<T extends 'message' | 'sync' | EventType.EventType | MessageType.ChatMessageType | MessageType.SyncMessageType>(
     type: T,
     callback: (data: Data<T>) => any,
   ) {
@@ -218,6 +236,9 @@ export class Mirai {
     // 监听所有消息类型
     if (type === 'message') {
       this._adaptMessageForAll('on', callback)
+    }
+    else if (type === 'sync') {
+      this._adaptSyncMessageForAll('on', callback)
     }
     else {
       try {
@@ -234,13 +255,16 @@ export class Mirai {
    * @param type
    * @param callback
    */
-  once<T extends 'message' | EventType.EventType | MessageType.ChatMessageType>(
+  once<T extends 'message' | 'sync' | EventType.EventType | MessageType.ChatMessageType | MessageType.SyncMessageType>(
     type: T,
     callback: (data: Data<T>) => any,
   ) {
     const emitter = this.eventEmitter
     if (type === 'message') {
       this._adaptMessageForAll('once', callback)
+    }
+    else if (type === 'sync') {
+      this._adaptSyncMessageForAll('once', callback)
     }
     else {
       try {
@@ -257,13 +281,16 @@ export class Mirai {
    * @param type
    * @param callback
    */
-  off<T extends 'message' | EventType.EventType | MessageType.ChatMessageType>(
+  off<T extends 'message' | 'sync' | EventType.EventType | MessageType.ChatMessageType | MessageType.SyncMessageType>(
     type: T,
     callback: (data: Data<T>) => any,
   ) {
     const emitter = this.eventEmitter
     if (type === 'message') {
       this._adaptMessageForAll('off', callback)
+    }
+    else if (type === 'sync') {
+      this._adaptSyncMessageForAll('off', callback)
     }
     else {
       try {
@@ -283,7 +310,7 @@ export class Mirai {
    */
   async reply(
     msgChain: string | MessageType.MessageChain,
-    srcMsg: EventType.Event | MessageType.ChatMessage,
+    srcMsg: EventType.Event | MessageType.ChatMessage | MessageType.SyncMessage,
     quote = false,
   ) {
     let messageId = 0
@@ -300,7 +327,29 @@ export class Mirai {
       msgChain = [msgChain]
 
     // reply 不同的目标
-    switch (srcMsg.type) {
+      switch (srcMsg.type) {
+      case 'TempSyncMessage':
+        return this.api.sendTempMessage(
+          msgChain,
+          srcMsg.subject.id,
+          srcMsg.subject.group.id,
+          messageId,
+        )
+      case 'FriendSyncMessage':
+        type = 'friend'
+        target = srcMsg.subject.id
+        break
+      case 'GroupSyncMessage':
+        type = 'group'
+        target = srcMsg.subject.id
+        break
+      case 'StrangerSyncMessage':
+        type = 'friend'
+        target = srcMsg.subject.id
+        break
+      case 'StrangerMessage':
+      case 'OtherClientMessage':
+        return;
       case 'TempMessage':
         return this.api.sendTempMessage(
           msgChain,
@@ -402,7 +451,7 @@ export class Mirai {
    * 处理消息
    * @param msg
    */
-  handle(msg: MessageType.ChatMessage | EventType.Event) {
+  handle(msg: MessageType.ChatMessage | MessageType.SyncMessage | EventType.Event) {
     createHelperForMsg(this, msg)
 
     this.beforeListener.forEach((cb) => {

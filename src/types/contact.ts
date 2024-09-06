@@ -81,4 +81,14 @@ export interface Member extends BaseUser {
   group: Group
 }
 
+/**
+ * 其他客户端同步信息类型
+ */
+export interface OtherClient extends BaseUser {
+  /**
+   * 其他客户端平台
+   */
+  platform: string
+}
+
 export type User = Friend | Member
